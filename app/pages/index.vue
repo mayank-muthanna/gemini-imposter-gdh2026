@@ -29,7 +29,7 @@ const handleJoin = async () => {
   try {
     // Join logic here usually returns ID
     // For this hackathon, we assume direct navigation logic handles join on mount
-    router.push(`/game/code/${joinCode.value}`);
+    router.push(`/game/${joinCode.value}`);
   } catch (e) {
     alert("Invalid code");
   }
