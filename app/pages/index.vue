@@ -4,64 +4,99 @@ import { useRouter } from "vue-router";
 import { api } from "../../convex/_generated/api";
 
 const router = useRouter();
+
+// DEFINE HOOKS HERE (Top Level)
 const createGame = useConvexMutation(api.game.createGame);
 const joinGame = useConvexMutation(api.game.joinGame);
 
 const joinCode = ref("");
+const userName = ref("");
+const isLoading = ref(false);
+
+const getSession = () => {
+  let s = localStorage.getItem("gemini_session");
+  if (!s) {
+    s = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem("gemini_session", s);
+  }
+  return s;
+};
 
 const handleCreate = async () => {
-  const gameId = await createGame.mutate({});
-  // In real app, you'd get the code from the result, query it, then route
-  // Simplified: we'll route to lobby and let the lobby fetch by ID/Code
-  // Actually, let's just create a session ID here
-  const sessionId = Math.random().toString(36);
-  localStorage.setItem("gemini_game_session", sessionId);
-  // Need to fetch the game code... assume createGame returns ID, we navigate to ID
-  // But for better UX, let's redirect to a waiting room
-  // (Assuming you can pass ID in URL)
-  router.push(`/game/${gameId}`);
+  if (!userName.value) return alert("Enter Name");
+  isLoading.value = true;
+  const sessionId = getSession();
+
+  try {
+    // Single mutation call. It creates game AND adds player.
+    const gameId = await createGame.mutate({
+      realName: userName.value,
+      sessionId,
+    });
+    router.push(`/game/${gameId}`);
+  } catch (e: any) {
+    alert("Error creating game: " + e.message);
+    isLoading.value = false;
+  }
 };
 
 const handleJoin = async () => {
-  if (!joinCode.value) return;
-  const sessionId = Math.random().toString(36);
-  localStorage.setItem("gemini_game_session", sessionId);
+  if (!joinCode.value || !userName.value) return alert("Enter Name and Code");
+  isLoading.value = true;
+  const sessionId = getSession();
   try {
-    // Join logic here usually returns ID
-    // For this hackathon, we assume direct navigation logic handles join on mount
-    router.push(`/game/${joinCode.value}`);
-  } catch (e) {
-    alert("Invalid code");
+    const gameId = await joinGame.mutate({
+      gameCode: joinCode.value.toUpperCase(),
+      realName: userName.value,
+      sessionId,
+    });
+    router.push(`/game/${gameId}`);
+  } catch (e: any) {
+    alert(e.message);
+    isLoading.value = false;
   }
 };
 </script>
 
 <template>
-  <div class="min-h-screen bg-[#FFF4EE] flex items-center justify-center p-4">
-    <div class="max-w-md w-full text-center space-y-8">
-      <h1 class="text-4xl font-bold text-[#5a2d1a]">Mayank Muthanna</h1>
+  <div
+    class="min-h-screen bg-[#2A2320] flex items-center justify-center p-4 font-mono"
+  >
+    <div
+      class="max-w-md w-full text-center space-y-6 bg-[#3D3430] p-8 rounded-3xl shadow-2xl border-4 border-[#D17C5A]"
+    >
+      <h1 class="text-5xl font-black text-[#D17C5A] tracking-tighter">
+        GEMINI<br /><span class="text-white text-2xl">IMPOSTER</span>
+      </h1>
 
-      <div class="space-y-4">
+      <input
+        v-model="userName"
+        placeholder="YOUR NAME"
+        class="w-full bg-[#2A2320] text-white p-4 rounded-xl text-center font-bold text-xl outline-none border-2 border-transparent focus:border-[#D17C5A] transition"
+      />
+
+      <div class="space-y-4 pt-4 border-t border-gray-600">
         <button
           @click="handleCreate"
-          class="w-full py-4 bg-[#d17c5a] text-white rounded-2xl font-bold text-xl hover:bg-[#b96547] transition"
+          :disabled="isLoading"
+          class="w-full py-4 bg-[#D17C5A] text-white rounded-xl font-bold text-xl hover:bg-[#B96547] transition shadow-[0_4px_0_#8a4b32] active:translate-y-1 active:shadow-none"
         >
-          Create Lobby
+          CREATE GAME
         </button>
-
-        <div class="relative">
+        <div class="flex gap-2">
           <input
             v-model="joinCode"
-            placeholder="Enter Code"
-            class="w-full py-4 px-6 rounded-2xl border-2 border-[#f0cdbb] text-center text-xl uppercase"
+            placeholder="CODE"
+            class="w-24 bg-[#2A2320] text-white p-3 rounded-xl text-center font-bold uppercase"
           />
+          <button
+            @click="handleJoin"
+            :disabled="isLoading"
+            class="flex-1 py-3 bg-white text-[#2A2320] rounded-xl font-bold hover:bg-gray-200 transition"
+          >
+            JOIN
+          </button>
         </div>
-        <button
-          @click="handleJoin"
-          class="w-full py-3 bg-white border-2 border-[#d17c5a] text-[#d17c5a] rounded-xl font-bold"
-        >
-          Join Game
-        </button>
       </div>
     </div>
   </div>

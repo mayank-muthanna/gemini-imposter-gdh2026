@@ -1,31 +1,30 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 
 const props = defineProps<{ endTime: number; totalDuration: number }>();
 const timeLeft = ref(0);
 const isVisible = ref(true);
 
-const interval = setInterval(() => {
-  const now = Date.now();
-  const diff = Math.max(0, Math.ceil((props.endTime - now) / 1000));
+const timer = setInterval(() => {
+  const diff = Math.max(0, Math.ceil((props.endTime - Date.now()) / 1000));
   timeLeft.value = diff;
 
-  // 1/3rd rule: Hide timer if time left is less than 2/3rds of total
-  // Actually the prompt says: "Once 1/3rd of the time passes - the timer will disappear"
-  const timePassed = props.totalDuration - diff;
-  if (timePassed > props.totalDuration / 3) {
+  // 1/3rd logic: If we have passed 1/3 of duration, hide.
+  // Wait... prompt says "Once 1/3rd of the time PASSES" -> HIDE.
+  const elapsed = props.totalDuration - diff;
+  if (elapsed > props.totalDuration / 3) {
     isVisible.value = false;
+  } else {
+    isVisible.value = true;
   }
-}, 1000);
+}, 500);
 
-onUnmounted(() => clearInterval(interval));
+onUnmounted(() => clearInterval(timer));
 </script>
 
 <template>
-  <div class="text-center mb-4 h-8">
-    <div v-if="isVisible" class="text-2xl font-mono font-bold text-[#d17c5a]">
-      {{ timeLeft }}s
-    </div>
-    <div v-else class="text-sm font-bold text-red-500 animate-pulse">???</div>
+  <div class="h-8 font-mono text-xl font-bold">
+    <span v-if="isVisible">{{ timeLeft }}s</span>
+    <span v-else class="text-red-500 animate-pulse">???</span>
   </div>
 </template>

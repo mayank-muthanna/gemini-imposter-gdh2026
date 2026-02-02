@@ -3,38 +3,43 @@ import { v } from "convex/values";
 
 export default defineSchema({
   games: defineTable({
-    code: v.string(), // Private room code
+    code: v.string(),
     status: v.union(
       v.literal("waiting"),
-      v.literal("playing"),
-      v.literal("finished"),
+      v.literal("discussion"),
+      v.literal("voting"),
+      v.literal("ended"),
     ),
     round: v.number(),
-    roundEndTime: v.optional(v.number()), // Unix timestamp for timer
-    winner: v.optional(v.string()), // "ai" or "humans"
+    startTime: v.optional(v.number()), // When current phase started
+    endTime: v.optional(v.number()), // When current phase ends
+    winner: v.optional(v.union(v.literal("ai"), v.literal("humans"))),
+    image: v.optional(v.string()), // The abstract image for the round
   }).index("by_code", ["code"]),
 
   players: defineTable({
     gameId: v.id("games"),
-    name: v.string(), // The visible shape name (e.g., "Triangle")
-    sessionId: v.string(), // To identify the user locally
+    realName: v.string(), // User's inputted name (e.g., "Mayank")
+    shape: v.string(), // Current visible mask (e.g., "Triangle")
+    sessionId: v.string(), // LocalStorage ID
     isAi: v.boolean(),
     isEliminated: v.boolean(),
-    assignedImage: v.optional(v.string()), // URL to the abstract image
-    avatar: v.string(), // "triangle", "circle", etc.
+    hasVoted: v.boolean(), // Reset every round
   }).index("by_game", ["gameId"]),
 
   messages: defineTable({
     gameId: v.id("games"),
-    playerId: v.id("players"), // Who sent it
+    playerId: v.id("players"),
+    playerName: v.string(), // Snapshot of shape name at time of sending
     text: v.string(),
     timestamp: v.number(),
+    isAi: v.boolean(),
   }).index("by_game", ["gameId"]),
 
   votes: defineTable({
     gameId: v.id("games"),
     round: v.number(),
     voterId: v.id("players"),
-    voteForId: v.id("players"),
+    targetId: v.id("players"),
   }).index("by_game_round", ["gameId", "round"]),
 });
