@@ -5,6 +5,20 @@ import { api } from "../../convex/_generated/api";
 
 const router = useRouter();
 
+// Your existing code...
+const testGemini = useConvexMutation(api.game.testGeminiTrigger);
+const testStatus = ref("");
+
+const runTest = async () => {
+  testStatus.value = "Testing... (check browser console for logs)";
+  try {
+    const result = await testGemini.mutate({});
+    testStatus.value = result.message;
+  } catch (e: any) {
+    testStatus.value = "Error: " + e.message;
+  }
+};
+
 // DEFINE HOOKS HERE (Top Level)
 const createGame = useConvexMutation(api.game.createGame);
 const joinGame = useConvexMutation(api.game.joinGame);
@@ -68,6 +82,22 @@ const handleJoin = async () => {
       <h1 class="text-5xl font-black text-[#D17C5A] tracking-tighter">
         GEMINI<br /><span class="text-white text-2xl">IMPOSTER</span>
       </h1>
+
+      <!-- ADD THIS TEST BUTTON -->
+      <div class="fixed top-4 right-4 z-50">
+        <button
+          @click="runTest"
+          class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg shadow-lg text-sm"
+        >
+          🤖 Test Gemini
+        </button>
+        <div
+          v-if="testStatus"
+          class="mt-2 p-3 bg-gray-800 text-white rounded-lg max-w-xs text-xs"
+        >
+          {{ testStatus }}
+        </div>
+      </div>
 
       <input
         v-model="userName"

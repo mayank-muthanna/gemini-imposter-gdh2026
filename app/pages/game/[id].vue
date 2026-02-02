@@ -1,50 +1,60 @@
 <script setup lang="ts">
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { onBeforeUnmount, watchEffect, computed } from "vue";
 import { api } from "../../../convex/_generated/api";
 import GameLobby from "~/components/GameLobby.vue";
 import GameBoard from "~/components/GameBoard.vue";
 
 const route = useRoute();
+const router = useRouter();
 const gameId = route.params.id as any;
+
+// 1. Robust Session Management
 const sessionId =
   typeof window !== "undefined"
-    ? localStorage.getItem("gemini_session") || ""
+    ? localStorage.getItem("gemini_session") ||
+      "USER_" + Math.random().toString(36).substr(2, 9)
     : "";
 
-// Standard Query
+// Save it back if it was generated
+if (typeof window !== "undefined" && !localStorage.getItem("gemini_session")) {
+  localStorage.setItem("gemini_session", sessionId);
+}
+
 const { data: gameState } = useConvexQuery(api.game.getGameState, {
   gameId,
   sessionId,
 });
 
-// ACTIONS REPLACED WITH MUTATIONS
-const triggerAiTurn = useConvexMutation(api.game.triggerAiTurn);
-const triggerAiVote = useConvexMutation(api.game.triggerAiVote);
+// 2. Exit Logic
+const { mutate: leaveGame } = useConvexMutation(api.game.leaveGame);
+
+const handleExit = () => {
+  if (gameState.value?.game && gameState.value.game.status !== "ended") {
+    // We use sendBeacon in 'beforeunload' usually, but here we try the mutation
+    leaveGame({ gameId, sessionId });
+  }
+};
+
+// Trigger when navigating away within Vue
+onBeforeUnmount(() => {
+  handleExit();
+});
+
+// Trigger when closing tab/browser
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", handleExit);
+}
+
+// 3. Auto-Redirect if Game is Deleted (Cleanup)
+watchEffect(() => {
+  if (gameState.value === null) {
+    router.push("/");
+  }
+});
 
 const isHost = computed(
   () => gameState.value?.players[0]?.sessionId === sessionId,
-);
-
-let aiInterval: any;
-
-watch(
-  () => gameState.value?.game.status,
-  (status) => {
-    if (isHost.value && status === "discussion") {
-      // Trigger AI Chat
-      aiInterval = setInterval(() => {
-        triggerAiTurn.mutate({ gameId });
-      }, 4000);
-    } else if (isHost.value && status === "voting") {
-      // Trigger AI Vote
-      setTimeout(() => {
-        triggerAiVote.mutate({ gameId });
-      }, 2000);
-      clearInterval(aiInterval);
-    } else {
-      clearInterval(aiInterval);
-    }
-  },
 );
 </script>
 
@@ -53,7 +63,7 @@ watch(
     v-if="!gameState"
     class="h-screen bg-[#2A2320] flex items-center justify-center text-[#D17C5A] animate-pulse font-bold"
   >
-    LOADING SIGNAL...
+    CONNECTING...
   </div>
 
   <div v-else class="min-h-screen bg-[#2A2320] text-[#E0D8D4] font-mono p-4">
@@ -96,20 +106,24 @@ watch(
         <div
           v-for="p in gameState.players"
           :key="p._id"
-          class="p-4 bg-[#3D3430] rounded-xl border-2"
-          :class="p.isAi ? 'border-red-500' : 'border-green-500'"
+          class="p-4 bg-[#3D3430] rounded-xl border-2 transition-all"
+          :class="
+            p.isAi
+              ? 'border-red-500 scale-105 shadow-xl'
+              : 'border-green-500 opacity-75'
+          "
         >
-          <div class="font-bold">{{ p.realName }}</div>
-          <div class="text-xs opacity-70">
-            {{ p.isAi ? "THE AI" : "HUMAN" }}
+          <div class="font-bold text-xl">{{ p.realName }}</div>
+          <div class="text-xs uppercase tracking-widest mt-1">
+            {{ p.isAi ? "THE IMPOSTOR" : "HUMAN" }}
           </div>
         </div>
       </div>
       <button
-        onclick="window.location.href = '/'"
-        class="bg-white text-black px-8 py-3 rounded-xl font-bold"
+        @click="router.push('/')"
+        class="bg-[#D17C5A] hover:bg-[#b56b4d] text-white px-8 py-3 rounded-xl font-bold transition-colors"
       >
-        HOME
+        BACK TO HOME
       </button>
     </div>
 

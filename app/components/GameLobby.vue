@@ -8,7 +8,9 @@ const startGame = useConvexMutation(api.game.startGame);
   <div class="flex flex-col items-center gap-8 mt-10">
     <div class="text-center">
       <h2 class="text-3xl font-bold mb-2">WAITING FOR PLAYERS</h2>
+      <!-- Show requirement clearly -->
       <p class="text-[#D17C5A]">{{ players.length }} / 8 JOINED</p>
+      <p class="text-xs text-gray-500 mt-2">Need 3+ humans to start</p>
     </div>
 
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-2xl">
@@ -33,7 +35,7 @@ const startGame = useConvexMutation(api.game.startGame);
       :disabled="players.length < 3"
       class="mt-8 px-12 py-4 bg-[#D17C5A] text-white rounded-2xl font-bold text-xl hover:bg-[#B96547] disabled:opacity-50 disabled:cursor-not-allowed transition"
     >
-      START GAME
+      {{ players.length < 3 ? "WAITING FOR 3 PLAYERS..." : "START GAME" }}
     </button>
     <div v-else class="animate-pulse text-sm opacity-50">
       WAITING FOR HOST TO START...

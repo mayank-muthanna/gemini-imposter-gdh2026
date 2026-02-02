@@ -32,13 +32,16 @@ const handleVote = (targetId: any) => {
     <!-- TIMER / PHASE HEADER -->
     <div class="text-center mb-6">
       <h2 class="text-2xl font-black uppercase text-[#D17C5A] mb-2">
-        {{ game.status }}
+        {{ game.status }} PHASE
       </h2>
+
+      <!-- UPDATED TIMER PROPS -->
       <GameTimer
-        v-if="game.endTime"
-        :endTime="game.endTime"
-        :totalDuration="(game.endTime - game.startTime) / 1000"
+        v-if="game.status === 'discussion'"
+        :startTime="game.startTime"
+        :duration="game.roundDuration"
       />
+
       <div v-if="isVoting" class="text-red-400 animate-pulse font-bold">
         VOTE FOR THE IMPOSTER
       </div>
@@ -54,6 +57,7 @@ const handleVote = (targetId: any) => {
           v-if="isVoting"
           class="absolute inset-0 z-20 bg-[#2A2320]/95 flex flex-col items-center justify-center p-8"
         >
+          <h3 class="text-xl font-bold mb-4 text-[#E0D8D4]">WHO IS THE AI?</h3>
           <div class="grid grid-cols-3 gap-4 w-full">
             <button
               v-for="p in activePlayers"
@@ -64,8 +68,11 @@ const handleVote = (targetId: any) => {
                 myPlayer.isEliminated ||
                 p._id === myPlayer._id
               "
-              class="aspect-square rounded-xl bg-[#3D3430] border-2 border-[#5A4D48] hover:border-[#D17C5A] hover:bg-[#D17C5A]/20 transition flex flex-col items-center justify-center gap-2"
-              :class="{ 'opacity-50': myPlayer.hasVoted }"
+              class="aspect-square rounded-xl bg-[#3D3430] border-2 border-[#5A4D48] hover:border-[#D17C5A] hover:bg-[#D17C5A]/20 transition flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="{
+                'opacity-50 ring-2 ring-green-500':
+                  myPlayer.hasVoted && !p.isEliminated,
+              }"
             >
               <div class="text-2xl">{{ p.shape }}</div>
               <div
@@ -76,19 +83,23 @@ const handleVote = (targetId: any) => {
               </div>
             </button>
           </div>
-          <div v-if="myPlayer.hasVoted" class="mt-8 text-[#D17C5A]">
+          <div
+            v-if="myPlayer.hasVoted"
+            class="mt-8 text-[#D17C5A] animate-pulse"
+          >
             VOTE CAST. WAITING...
           </div>
         </div>
 
         <!-- IMAGE DISPLAY -->
         <div class="w-full h-full bg-black rounded-xl overflow-hidden relative">
+          <!-- AI BLINDNESS UI -->
           <div
             v-if="myPlayer.isAi"
-            class="absolute inset-0 flex items-center justify-center bg-gray-900 text-center p-8"
+            class="absolute inset-0 flex items-center justify-center bg-gray-900 text-center p-8 border-4 border-red-500/50"
           >
             <div>
-              <h3 class="text-3xl font-black text-red-500 mb-4">
+              <h3 class="text-3xl font-black text-red-500 mb-4 animate-pulse">
                 YOU ARE THE AI
               </h3>
               <p class="text-gray-400">You cannot see the image.</p>
