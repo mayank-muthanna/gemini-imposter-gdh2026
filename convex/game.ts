@@ -186,6 +186,7 @@ async function assignShapes(ctx: any, gameId: any) {
 }
 
 // Helper: Start Round with Dynamic Time
+// Helper: Start Round with Dynamic Time
 async function startRound(ctx: any, gameId: any) {
   const players = await ctx.db
     .query("players")
@@ -196,7 +197,7 @@ async function startRound(ctx: any, gameId: any) {
   const aiAlive = activePlayers.some((p: any) => p.isAi);
   const humansAlive = activePlayers.filter((p: any) => !p.isAi).length;
 
-  // Win Conditions
+  // --- WIN CONDITIONS ---
   if (!aiAlive) {
     await ctx.db.patch(gameId, { status: "ended", winner: "humans" });
     return;
@@ -210,12 +211,14 @@ async function startRound(ctx: any, gameId: any) {
   // 6+ players = 30s, 5 = 25s, 4 = 20s, 3 = 15s
   let duration = 15;
   const count = activePlayers.length;
-  if (count >= 6) duration = 30;
-  else if (count === 5) duration = 25;
-  else if (count === 4) duration = 20;
-  else if (count === 3) duration = 15;
+  if (count >= 6) duration = 90;
+  else if (count === 5) duration = 90;
+  else if (count === 4) duration = 90;
+  else if (count === 3) duration = 90;
 
   const startTime = Date.now();
+
+  // Ensure we pick an image that exists in our AI "Cheat Sheet" mapping
   const image =
     ABSTRACT_IMAGES[Math.floor(Math.random() * ABSTRACT_IMAGES.length)];
 
@@ -228,7 +231,7 @@ async function startRound(ctx: any, gameId: any) {
     startTime,
     roundDuration: duration,
     image,
-    aiProcessing: false,
+    aiProcessing: false, // Unlock AI logic
   });
 
   // Schedule End of Round
@@ -238,8 +241,10 @@ async function startRound(ctx: any, gameId: any) {
     { gameId },
   );
 
-  // Kickstart AI thought process (small random delay to not be instant)
-  await ctx.scheduler.runAfter(2000, internal.actions.decideAiAction, {
+  // --- AI STRATEGY TRIGGER ---
+  // We schedule the AI to check the state 3.5 seconds in.
+  // In actions.ts, we will have logic: "If 4s passed and nobody spoke, I speak."
+  await ctx.scheduler.runAfter(3500, internal.actions.decideAiAction, {
     gameId,
   });
 }
@@ -286,14 +291,22 @@ export const sendMessage = mutation({
       isAi: false,
     });
 
-    // Instead of random triggering, we schedule a "Decision Point" for the AI
-    // We debounce this: if many messages come in, the AI will evaluate the whole context shortly
+    // --- AI REACTION LOGIC ---
     const game = await ctx.db.get(args.gameId);
+
+    // Only trigger if discussion is active and AI isn't currently generating
     if (game.status === "discussion" && !game.aiProcessing) {
-      // Schedule the AI to think in 2-4 seconds.
-      // This feels more natural than instant or overlapping replies.
+      // Calculate "Reading Time"
+      // Base delay 1.5s + 50ms per character.
+      // e.g., "sus" (3 chars) = ~1.6s delay
+      // e.g., "I think it is red and blue" (28 chars) = ~2.9s delay
+      let responseDelay = 1500 + args.text.length * 50;
+
+      // Cap the delay at 4.5s so it doesn't miss the round end
+      responseDelay = Math.min(responseDelay, 4500);
+
       await ctx.scheduler.runAfter(
-        2000 + Math.random() * 2000,
+        responseDelay,
         internal.actions.decideAiAction,
         { gameId: args.gameId },
       );
