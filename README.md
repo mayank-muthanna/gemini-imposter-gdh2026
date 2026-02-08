@@ -59,7 +59,7 @@ The AI needs an API key to generate responses.
 | :--- | :--- | :--- |
 | `GOOGLE_API_KEY` | `your_api_key_here` | Your Google Gemini or Groq API Key |
 
-> **⚠️ Note on API Keys:** The code in `actions.ts` currently looks for `GROQ_API_KEY` or `GOOGLE_API_KEY`. Ensure the variable name in your Convex dashboard matches exactly what is inside your `actions.ts` file (e.g., `process.env.GOOGLE_API_KEY`).
+> **⚠️ Note on API Keys:** The code in `actions.ts` currently looks for `GOOGLE_API_KEY`. Ensure the variable name in your Convex dashboard matches exactly what is inside your `actions.ts` file (e.g., `process.env.GOOGLE_API_KEY`).
 
 ### 5. Run the App
 Open a new terminal window (keep `npx convex dev` running in the other one) and start the frontend:
