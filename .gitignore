@@ -24,3 +24,4 @@ logs
 !.env.example
 convex/_generated/api.d.ts
 convex/_generated/api.d.ts
+convex
