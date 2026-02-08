@@ -17,7 +17,7 @@ const activePlayers = computed(() =>
   props.players.filter((p) => !p.isEliminated),
 );
 
-const handleVote = (targetId: any) => {
+const handleVote = (targetId: any | undefined) => {
   if (props.myPlayer.hasVoted || props.myPlayer.isEliminated) return;
   castVote.mutate({
     gameId: props.game._id,
@@ -58,7 +58,9 @@ const handleVote = (targetId: any) => {
           class="absolute inset-0 z-20 bg-[#2A2320]/95 flex flex-col items-center justify-center p-8"
         >
           <h3 class="text-xl font-bold mb-4 text-[#E0D8D4]">WHO IS THE AI?</h3>
-          <div class="grid grid-cols-3 gap-4 w-full">
+
+          <!-- PLAYERS GRID -->
+          <div class="grid grid-cols-3 gap-4 w-full mb-4">
             <button
               v-for="p in activePlayers"
               :key="p._id"
@@ -75,17 +77,22 @@ const handleVote = (targetId: any) => {
               }"
             >
               <div class="text-2xl">{{ p.shape }}</div>
-              <div
-                v-if="myPlayer.hasVoted && !p.isEliminated"
-                class="text-xs text-green-500"
-              >
-                ?
-              </div>
+              <!-- ... voted indicator ... -->
             </button>
           </div>
+
+          <!-- NEW: SKIP BUTTON -->
+          <button
+            @click="handleVote(undefined)"
+            :disabled="myPlayer.hasVoted || myPlayer.isEliminated"
+            class="w-full py-3 bg-gray-700 hover:bg-gray-600 rounded-xl font-bold text-gray-300 transition disabled:opacity-50"
+          >
+            SKIP VOTE
+          </button>
+
           <div
             v-if="myPlayer.hasVoted"
-            class="mt-8 text-[#D17C5A] animate-pulse"
+            class="mt-4 text-[#D17C5A] animate-pulse"
           >
             VOTE CAST. WAITING...
           </div>

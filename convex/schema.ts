@@ -39,6 +39,6 @@ export default defineSchema({
     gameId: v.id("games"),
     round: v.number(),
     voterId: v.id("players"),
-    targetId: v.id("players"),
+    targetId: v.optional(v.id("players")),
   }).index("by_game_round", ["gameId", "round"]),
 });

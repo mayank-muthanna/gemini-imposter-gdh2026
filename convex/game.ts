@@ -13,10 +13,9 @@ const SHAPES = [
   "Octagon",
 ];
 const ABSTRACT_IMAGES = [
-  "https://i.imgur.com/M6r6Z2c.jpeg",
-  "https://i.imgur.com/2heE5mO.jpeg",
-  "https://i.imgur.com/wt3qGqU.jpeg",
-  "https://i.imgur.com/qM9B5dC.jpeg",
+  "https://images.saatchiart.com/saatchi/17870/art/8725564/7789081-HSC00923-7.jpg",
+  "https://thumbs.dreamstime.com/b/street-art-contemporary-painting-wall-abstract-geometric-background-photo-79313354.jpg",
+  "https://thumbs.dreamstime.com/b/colorful-abstract-painting-texture-mixed-media-alcohol-ink-amazing-like-contemporary-modern-artwork-76156748.jpg",
 ];
 
 function shuffleArray(array: any[]) {
@@ -208,13 +207,12 @@ async function startRound(ctx: any, gameId: any) {
   }
 
   // --- DYNAMIC DURATION LOGIC ---
-  // 6+ players = 30s, 5 = 25s, 4 = 20s, 3 = 15s
   let duration = 15;
   const count = activePlayers.length;
-  if (count >= 6) duration = 90;
-  else if (count === 5) duration = 90;
-  else if (count === 4) duration = 90;
-  else if (count === 3) duration = 90;
+  if (count >= 6) duration = 35;
+  else if (count === 5) duration = 30;
+  else if (count === 4) duration = 25;
+  else if (count === 3) duration = 20;
 
   const startTime = Date.now();
 
@@ -257,8 +255,13 @@ export const transitionToVoting = internalMutation({
 
     await ctx.db.patch(args.gameId, { status: "voting" });
 
-    // Schedule AI Vote
+    // Schedule AI Vote (2s)
     await ctx.scheduler.runAfter(2000, internal.actions.runAiVote, {
+      gameId: args.gameId,
+    });
+
+    // CHANGE: Force Skip after 10 seconds
+    await ctx.scheduler.runAfter(10000, internal.game.forceSkip, {
       gameId: args.gameId,
     });
   },
@@ -345,7 +348,7 @@ export const castVote = mutation({
   args: {
     gameId: v.id("games"),
     sessionId: v.string(),
-    targetId: v.id("players"),
+    targetId: v.optional(v.id("players")),
   },
   handler: async (ctx, args) => {
     const player = await ctx.db
@@ -367,7 +370,6 @@ export const castVote = mutation({
     });
     await ctx.db.patch(player._id, { hasVoted: true });
 
-    // Check if everyone voted
     const activePlayers = (
       await ctx.db
         .query("players")
@@ -388,6 +390,41 @@ export const castVote = mutation({
   },
 });
 
+export const forceSkip = internalMutation({
+  args: { gameId: v.id("games") },
+  handler: async (ctx, args) => {
+    const game = await ctx.db.get(args.gameId);
+    // If phase already changed (everyone voted early), do nothing
+    if (!game || game.status !== "voting") return;
+
+    const players = await ctx.db
+      .query("players")
+      .withIndex("by_game", (q) => q.eq("gameId", args.gameId))
+      .collect();
+
+    const activePlayers = players.filter((p) => !p.isEliminated);
+
+    // Find players who haven't voted yet
+    const pendingVoters = activePlayers.filter((p) => !p.hasVoted);
+
+    if (pendingVoters.length === 0) return;
+
+    // Force a "Skip" vote for them (targetId: undefined)
+    for (const p of pendingVoters) {
+      await ctx.db.insert("votes", {
+        gameId: args.gameId,
+        round: game.round,
+        voterId: p._id,
+        targetId: undefined, // Skip
+      });
+      await ctx.db.patch(p._id, { hasVoted: true });
+    }
+
+    // Trigger resolution now that everyone is "accounted for"
+    await resolveVotes(ctx, args.gameId);
+  },
+});
+
 async function resolveVotes(ctx: any, gameId: any) {
   const game = await ctx.db.get(gameId);
   const votes = await ctx.db
@@ -398,37 +435,70 @@ async function resolveVotes(ctx: any, gameId: any) {
     .collect();
 
   const tally: Record<string, number> = {};
-  votes.forEach((v) => (tally[v.targetId] = (tally[v.targetId] || 0) + 1));
+  let skipCount = 0;
+
+  // 1. Tally votes vs Skips
+  votes.forEach((v: any) => {
+    if (v.targetId) {
+      tally[v.targetId] = (tally[v.targetId] || 0) + 1;
+    } else {
+      skipCount++;
+    }
+  });
 
   let maxVotes = 0;
-  let candidate = null;
+  let candidateId: string | null = null;
+  let isTie = false;
 
-  // Find player with most votes
+  // 2. Find the human target with the most votes
   for (const [pid, count] of Object.entries(tally)) {
     if (count > maxVotes) {
       maxVotes = count;
-      candidate = pid;
+      candidateId = pid;
+      isTie = false;
     } else if (count === maxVotes) {
-      candidate = null; // Tie
+      isTie = true; // Tie between two players
     }
   }
 
-  if (candidate) {
-    await ctx.db.patch(candidate as any, { isEliminated: true });
+  // 3. Determine Outcome
+  // We only eliminate if:
+  // - A candidate exists
+  // - That candidate has MORE votes than Skips
+  // - It is not a tie between two players
+
+  if (candidateId && maxVotes > skipCount && !isTie) {
+    // ELIMINATION
+    const victim = await ctx.db.get(candidateId as any);
+    await ctx.db.patch(candidateId as any, { isEliminated: true });
+
     await ctx.db.insert("messages", {
       gameId,
-      playerId: candidate as any,
+      playerId: candidateId as any,
       playerName: "SYSTEM",
-      text: "Was eliminated.",
+      // FIX: Message now includes the name
+      text: `${victim.shape} was eliminated.`,
       timestamp: Date.now(),
       isAi: false,
     });
   } else {
+    // SKIP OR TIE
+    // We need a valid ID for the message schema, so we pick the first voter or a random player
+    // (The UI ignores the ID for SYSTEM messages anyway)
+    const anyPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .first();
+
+    let reason = "Vote skipped.";
+    if (skipCount >= maxVotes && maxVotes > 0) reason = "Skipped (Majority).";
+    else if (skipCount === 0 && isTie) reason = "Tie vote.";
+
     await ctx.db.insert("messages", {
       gameId,
-      playerId: votes[0].voterId, // Hack to get ID, system uses name anyway
+      playerId: anyPlayer?._id,
       playerName: "SYSTEM",
-      text: "Tie vote. No one eliminated.",
+      text: `${reason} No one eliminated.`,
       timestamp: Date.now(),
       isAi: false,
     });
@@ -437,9 +507,15 @@ async function resolveVotes(ctx: any, gameId: any) {
   // --- 50-50 SHAPE SWITCH LOGIC ---
   if (Math.random() > 0.5) {
     await assignShapes(ctx, gameId);
+
+    const anyPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_game", (q) => q.eq("gameId", gameId))
+      .first();
+
     await ctx.db.insert("messages", {
       gameId,
-      playerId: votes[0].voterId,
+      playerId: anyPlayer?._id,
       playerName: "SYSTEM",
       text: "⚠️ ALERT: All shapes have been swapped!",
       timestamp: Date.now(),
